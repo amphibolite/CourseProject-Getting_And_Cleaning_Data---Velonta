@@ -1,0 +1,115 @@
+---
+title: "Codebook for Getting and Cleaning Data Course Project"
+author: "John Kenneth Velonta"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The first step was to load the features from the features.txt file, which contains the names of the features/variables that we will be utilizing in the assignment.
+
+```{r}
+library(tidyverse)
+
+features <- read.delim('./UCI HAR Dataset/features.txt', header=FALSE)
+```
+
+The next step was to convert the previously loaded features to a vector for further use.
+
+```{r}
+features_char <- unlist(features[['V1']], use.names = FALSE)
+```
+
+Next, I loaded the subject data for the test and training datasets. Then I used rbind to merge the test and train subjects.
+
+```{r}
+subject_test <- read.delim('./UCI HAR Dataset/test/subject_test.txt', header=FALSE, col.names = "Subject")
+subject_train <- read.delim('./UCI HAR Dataset/train/subject_train.txt', header=FALSE, col.names = "Subject")
+merged_subjects <- rbind(subject_test, subject_train)
+```
+
+Next, I loaded the activities file, merged them through rbind, and changed from numeric to verbose activities through a left_join.
+
+```{r}
+y_test <- read.delim('./UCI HAR Dataset/test/y_test.txt', header=FALSE, col.names = "Activity")
+y_train <- read.delim('./UCI HAR Dataset/train/y_train.txt', header=FALSE, col.names = "Activity")
+Merged_activities <- rbind(y_test,y_train)
+activity_labels <- read.delim('./UCI HAR Dataset/activity_labels.txt', header=FALSE)
+activity_labels <- cbind(activity_labels, do.call(rbind, strsplit(activity_labels$V1, "( +)")))
+names(activity_labels) = c('V1', 'Activity', 'V2')
+activity_labels <- mutate(activity_labels, Activity= as.numeric(activity_labels$Activity))
+Merged_activities <- left_join(Merged_activities, activity_labels, by=('Activity'))
+Merged_activities <- Merged_activities[3]
+names(Merged_activities) <- 'Activity'
+
+```
+
+Next, the test and training datasets were loaded and merged through rbind.
+
+```{r}
+X_test <- read.delim('./UCI HAR Dataset/test/X_test.txt', header=FALSE)
+X_train <- read.delim('./UCI HAR Dataset/train/X_train.txt', header=FALSE)
+Merged_data <- rbind(X_test,X_train)
+```
+I used a combination of strsplit, rbind, and cbind, to separate each feature from each observation to different columns.
+
+```{r}
+Merged_data_split <- cbind(Merged_data, do.call(rbind, strsplit(Merged_data$V1, "( +)")))
+
+```
+Then I had to deselect columns 1 and 2.
+
+```{r}
+Merged_data_split <- Merged_data_split[c(3:563)]
+
+```
+
+Then selected the columns representing the means and standard deviations with the use of grep. Any column name with mean or std on them were selected.
+
+```{r}
+Merged_data_split[] <- sapply(Merged_data_split, as.numeric)
+names(Merged_data_split) <- features_char
+mean_stdev_loc <- grep("mean|std",names(Merged_data_split))
+Merged_data_mean_stdev <- Merged_data_split[mean_stdev_loc]
+
+```
+Then, for tidying the feature names, f were changed to frequency, t were changed to time, and the numbers parentheses were removed through sub.
+
+```{r}
+names(Merged_data_mean_stdev) <- sub("[0-9]*[ ]*f","frequency",names(Merged_data_mean_stdev))
+names(Merged_data_mean_stdev) <- sub("[0-9]*[ ]*t","time",names(Merged_data_mean_stdev))
+names(Merged_data_mean_stdev) <- sub("[0-9]*[ ]*","",names(Merged_data_mean_stdev))
+names(Merged_data_mean_stdev) <- sub("\\(\\)","",names(Merged_data_mean_stdev))
+names(Merged_data_mean_stdev) <- tolower(names(Merged_data_mean_stdev))
+
+
+```
+
+I then merged the datasets, activities, and subjects through cbind.
+
+```{r}
+merged_all <- cbind(merged_subjects, Merged_activities, Merged_data_mean_stdev)
+
+```
+
+The resulting merged dataframe was then grouped by subject and activity, and then summarized to get the mean for each grouping.
+
+```{r}
+merged_all <- merged_all %>% group_by(Subject, Activity) %>%
+              summarize(across(everything(),mean))
+
+```
+
+The resulting dataframe was then exported as a csv file through write_csv and write.table.
+
+```{r}
+write_csv(merged_all, './Tidy_Data_Set.csv')
+write.table(merged_all, file='./Tidy_Data_Set.txt', row.name=FALSE)
+```
+
+```{r, echo=FALSE}
+merged_all
+```
